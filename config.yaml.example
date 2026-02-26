@@ -1,0 +1,31 @@
+# Subreddits to monitor — hardcoded, LLM cannot modify this list
+subreddits: 
+
+# Budget caps — enforced in code, LLM can never exceed these
+budget:
+  max_cost_usd: 
+  max_items_per_run: 
+  max_queries_per_run: 
+  time_window_hours: 
+
+# Matching configuration
+match:
+  min_confidence_threshold: 
+  max_matches_per_item: 
+  batch_size: 
+  min_text_length: 
+  max_author_occurrences_per_run: 
+
+# Tag auto-derivation keyword map (used when parentInterestIds is empty)
+tag_keywords:
+  
+
+# LLM configuration (Groq)
+llm:
+  primary_model: llama-3.3-70b-versatile  # Node C (planning) + Node G (matching)
+  fast_model: llama-3.1-8b-instant         # Node H (user summaries)
+  temperature: 0.1
+  max_tokens: 1024
+
+# Data retention
+retention_days: 30

@@ -1,0 +1,61 @@
+# Secrets — never commit
+.env
+.claude
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Auto-generated pipeline data
+data/faiss_index/
+data/recovery_queue.json
+
+# Node / frontend
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Python test/tool caches
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Logs
+*.log
+
+# Frontend env + cache (Vite)
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/.vite/
+
+# Optional: generated event data (if you don't want scraped data in git)
+data/events/*.json
+!data/events/sample_event.json
+
+config.yaml

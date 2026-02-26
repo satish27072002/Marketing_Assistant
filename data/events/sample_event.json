@@ -1,0 +1,15 @@
+{
+  "id": "evt_sample_001",
+  "title": "Stockholm Pub Quiz Night",
+  "location": {
+    "city": "Stockholm"
+  },
+  "startingAt": "2026-12-01T19:00:00Z",
+  "endingAt": "2026-12-01T22:00:00Z",
+  "capacity": 60,
+  "languages": ["en"],
+  "description": "Join us for a fun pub quiz night with drinks, beer, and prizes! Great way to meet new friends and strangers in Stockholm.",
+  "parentInterestIds": [],
+  "isCancelled": false,
+  "isDeleted": false
+}
