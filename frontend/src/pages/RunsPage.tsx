@@ -47,16 +47,16 @@ export function RunsPage() {
   const setParam = (key: keyof RunParams, value: number) =>
     setParams((p) => ({ ...p, [key]: value }))
 
-  // Compute effective params: in range mode, derive time_window_hours from the date inputs
+  // Compute effective params: in range mode, hours = now - fromDate (backend always ends at now)
   const effectiveParams: RunParams = React.useMemo(() => {
     if (dateMode === 'range' && fromDate) {
       const from = new Date(fromDate).getTime()
-      const to = new Date(toDate).getTime()
-      const hours = Math.max(1, Math.ceil((to - from) / 3_600_000))
+      const now = Date.now()
+      const hours = Math.max(1, Math.ceil((now - from) / 3_600_000))
       return { ...params, time_window_hours: hours }
     }
     return params
-  }, [dateMode, fromDate, toDate, params])
+  }, [dateMode, fromDate, params])
 
   const handleTrigger = () => {
     triggerRun.mutate(effectiveParams, {
@@ -68,10 +68,10 @@ export function RunsPage() {
   const lookbackDisplay = React.useMemo(() => {
     if (dateMode === 'range' && fromDate) {
       const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-      return `${fmt(fromDate)} – ${fmt(toDate)}`
+      return `${fmt(fromDate)} – Today`
     }
     return `${Math.round((params.time_window_hours ?? 168) / 24)} days`
-  }, [dateMode, fromDate, toDate, params.time_window_hours])
+  }, [dateMode, fromDate, params.time_window_hours])
 
   const budgetPct = sseUpdate
     ? Math.min(100, (sseUpdate.estimated_cost_usd / (params.max_cost_usd ?? 5)) * 100)
@@ -347,9 +347,9 @@ export function RunsPage() {
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm text-brand-white font-medium">Date range</label>
+                    <label className="text-sm text-brand-white font-medium">Start date</label>
                     <span className="text-sm font-semibold text-brand-gold tabular-nums">
-                      {fromDate && toDate ? `${Math.max(1, Math.ceil((new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86_400_000))} days` : '—'}
+                      {fromDate ? `${Math.max(1, Math.ceil((Date.now() - new Date(fromDate).getTime()) / 86_400_000))} days` : '—'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -357,22 +357,19 @@ export function RunsPage() {
                       <p className="text-[10px] text-brand-muted uppercase tracking-widest">From</p>
                       <DateInput
                         value={fromDate}
-                        max={toDate}
+                        max={today}
                         onChange={(e) => setFromDate(e.target.value)}
                       />
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] text-brand-muted uppercase tracking-widest">To</p>
-                      <DateInput
-                        value={toDate}
-                        min={fromDate}
-                        max={today}
-                        onChange={(e) => setToDate(e.target.value)}
-                      />
+                      <div className="w-full bg-brand-bg border border-brand-walnut/40 rounded-md px-3 py-1.5 text-sm text-brand-muted/60 italic">
+                        Today
+                      </div>
                     </div>
                   </div>
                   <p className="text-xs text-brand-muted leading-relaxed">
-                    Reddit is searched from the start date up to now.
+                    Reddit is searched from the start date up to today.
                   </p>
                 </div>
               )}

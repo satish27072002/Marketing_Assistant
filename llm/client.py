@@ -53,7 +53,13 @@ MOCK_BATCH_MATCH = {
                     "match_confidence": 0.88,
                     "match_reason": "User explicitly asks about pub quiz events in Stockholm",
                     "evidence_excerpt": "Looking for quiz or social events in Stockholm",
-                }
+                },
+                {
+                    "event_id": "__EVENT_1__",
+                    "match_confidence": 0.72,
+                    "match_reason": "User also mentions interest in social meetups",
+                    "evidence_excerpt": "Want to meet new people and try new things in Stockholm",
+                },
             ],
         },
         {
@@ -175,8 +181,8 @@ class LLMClient:
             mock = json.loads(json.dumps(MOCK_BATCH_MATCH))  # deep copy
             for i, result in enumerate(mock["results"]):
                 result["item_id"] = item_ids[i] if i < len(item_ids) else result["item_id"]
-                for match in result.get("matches", []):
-                    match["event_id"] = event_ids[0] if event_ids else match["event_id"]
+                for j, match in enumerate(result.get("matches", [])):
+                    match["event_id"] = event_ids[j % len(event_ids)] if event_ids else match["event_id"]
             return f"<matches>\n{json.dumps(mock, indent=2)}\n</matches>"
 
         llm_config = self._config.get("llm", {})

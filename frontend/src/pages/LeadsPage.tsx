@@ -157,8 +157,21 @@ export function LeadsPage() {
                           </a>
                         </div>
                       </TableCell>
-                      <TableCell className="text-brand-muted truncate max-w-[180px]">
-                        {eventMap[lead.primary_event_id] ?? lead.primary_event_id}
+                      <TableCell className="max-w-[220px]">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-brand-muted truncate">
+                            {eventMap[lead.primary_event_id] ?? lead.primary_event_id}
+                          </span>
+                          {lead.other_event_ids &&
+                            lead.other_event_ids.split(',').filter(Boolean).map((eid) => (
+                              <span
+                                key={eid}
+                                className="text-[9px] px-1.5 py-0.5 rounded border border-brand-walnut/50 text-brand-muted/70 shrink-0 whitespace-nowrap"
+                              >
+                                +{eventMap[eid]?.split(' ').slice(0, 2).join(' ') ?? eid}
+                              </span>
+                            ))}
+                        </div>
                       </TableCell>
                       <TableCell><ConfidencePill score={lead.top_confidence} /></TableCell>
                       <TableCell><StatusBadge status={lead.status} size="sm" /></TableCell>
@@ -221,19 +234,38 @@ export function LeadsPage() {
                                 "{lead.user_summary}"
                               </p>
                             )}
+                            {lead.other_event_ids && lead.other_event_ids.split(',').filter(Boolean).length > 0 && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] text-brand-muted uppercase tracking-widest shrink-0">
+                                  Also interested in
+                                </span>
+                                {lead.other_event_ids.split(',').filter(Boolean).map((eid) => (
+                                  <span
+                                    key={eid}
+                                    className="text-xs px-2 py-0.5 rounded border border-brand-walnut/40 text-brand-muted"
+                                  >
+                                    {eventMap[eid] ?? eid}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {lead.evidence_posts.length > 0 ? (
                               lead.evidence_posts.map((post) => (
                                 <div key={post.item_id} className="rounded-lg border border-brand-walnut/40 overflow-hidden">
                                   <div className="flex items-center justify-between px-3 py-2 bg-brand-walnut/20 border-b border-brand-walnut/30">
                                     <span className="text-[10px] font-medium text-brand-gold">r/{post.subreddit}</span>
-                                    <a
-                                      href={post.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[10px] text-brand-muted hover:text-brand-gold flex items-center gap-1 transition-colors"
-                                    >
-                                      View on Reddit <ExternalLink size={9} />
-                                    </a>
+                                    {post.url.includes('/mock') ? (
+                                      <span className="text-[10px] text-brand-muted/50 italic">Mock data</span>
+                                    ) : (
+                                      <a
+                                        href={post.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-brand-muted hover:text-brand-gold flex items-center gap-1 transition-colors"
+                                      >
+                                        View on Reddit <ExternalLink size={9} />
+                                      </a>
+                                    )}
                                   </div>
                                   <div className="px-3 py-2.5">
                                     <p className="text-xs text-brand-white leading-relaxed whitespace-pre-line">

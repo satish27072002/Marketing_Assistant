@@ -74,7 +74,9 @@ Scoring guide:
 - 0.3-0.4: Weak signal (tangential mention)
 - Below 0.3: Do not include the match
 
-Return up to 3 matches per item, only if confidence >= 0.3.
+Return ALL events this person shows genuine interest in, up to 3 per item.
+Do not limit to one match if multiple events are relevant — if a user mentions
+interest in two different activities, include both. Only include matches with confidence >= 0.3.
 If an item has no relevant matches, return an empty matches list for it.
 
 Return your response as JSON inside <matches> tags exactly like this:
