@@ -12,15 +12,15 @@ Output: list of user aggregate dicts
 """
 import logging
 import os
+import re
 from collections import defaultdict
 
-import yaml
 from dotenv import load_dotenv
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
-from db.models import UserEventAffinity
+from db.models import RawItem, UserEventAffinity
 from llm.client import LLMClient
 from llm.prompts import SUMMARY_PROMPT_V, SUMMARY_PROMPT_TEMPLATE, format_evidence_list
 from llm.schemas import UserSummary
@@ -29,12 +29,19 @@ from pipeline.state import PipelineState
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")
+_FB_GROUP_URL_RE = re.compile(
+    r"(https?://(?:www\.)?facebook\.com/groups/[^/?#]+)",
+    re.IGNORECASE,
+)
 
 
-def _load_config() -> dict:
-    with open(CONFIG_PATH, "r") as f:
-        return yaml.safe_load(f)
+def _facebook_group_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    m = _FB_GROUP_URL_RE.search(url)
+    if not m:
+        return None
+    return m.group(1).rstrip("/") + "/"
 
 
 def _template_summary(username: str, top_events: list[str]) -> str:
@@ -44,7 +51,13 @@ def _template_summary(username: str, top_events: list[str]) -> str:
 
 
 def aggregate_users_node(state: PipelineState) -> PipelineState:
-    mock_mode = os.environ.get("MOCK_MODE", "false").lower() == "true"
+    run_cfg = state.get("run_config", {})
+    mock_mode = bool(
+        run_cfg.get(
+            "mock_mode",
+            os.environ.get("MOCK_MODE", "false").lower() == "true",
+        )
+    )
     run_id = state.get("run_id", "dev-run")
     budget = state.get("budget")
 
@@ -55,7 +68,6 @@ def aggregate_users_node(state: PipelineState) -> PipelineState:
     try:
         # Load all affinity rows written during this run's items
         # (join via evidence_item_id → raw_items → run_id)
-        from db.models import RawItem
         run_item_ids = (
             db.query(RawItem.item_id)
             .filter(RawItem.run_id == run_id)
@@ -108,7 +120,25 @@ def aggregate_users_node(state: PipelineState) -> PipelineState:
                 r.evidence_excerpt for r in rows[:3]
                 if r.evidence_excerpt
             ]
+            evidence_item_ids = [r.evidence_item_id for r in rows[:3]]
+            raw_rows = (
+                db.query(RawItem.item_id, RawItem.permalink)
+                .filter(RawItem.item_id.in_(evidence_item_ids))
+                .all()
+            )
+            permalink_map = {item_id: permalink for item_id, permalink in raw_rows}
+            evidence_urls = [
+                permalink_map[item_id]
+                for item_id in evidence_item_ids
+                if permalink_map.get(item_id)
+            ]
             profile_url = rows[0].profile_url if rows else None
+            if not profile_url and source == "facebook":
+                for evidence_url in evidence_urls:
+                    group_url = _facebook_group_url(evidence_url)
+                    if group_url:
+                        profile_url = group_url
+                        break
 
             # Generate LLM summary
             summary = None
@@ -136,7 +166,7 @@ def aggregate_users_node(state: PipelineState) -> PipelineState:
                 "top_confidence": top_confidence,
                 "user_summary": summary,
                 "evidence_excerpts": excerpts,
-                "evidence_urls": [r.profile_url for r in rows[:3] if r.profile_url],
+                "evidence_urls": evidence_urls,
                 "prompt_version": SUMMARY_PROMPT_V,
             })
 

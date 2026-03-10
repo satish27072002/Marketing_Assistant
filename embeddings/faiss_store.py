@@ -125,6 +125,11 @@ class FaissStore:
             self._meta[event_id]["active"] = False
             logger.debug("Marked event %s inactive", event_id)
 
+    def mark_active(self, event_id: str) -> None:
+        if event_id in self._meta:
+            self._meta[event_id]["active"] = True
+            logger.debug("Marked event %s active", event_id)
+
     def rebuild_active_only(
         self,
         active_event_ids: list[str],

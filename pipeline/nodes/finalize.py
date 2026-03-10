@@ -73,16 +73,20 @@ def finalize_node(state: PipelineState) -> PipelineState:
                     error_pct, error_count, items_collected,
                 )
 
-        # --- Determine final status ---
-        stop_requested = budget.stop_requested if budget else False
-        final_status = "STOPPED" if stop_requested else "COMPLETED"
-        estimated_cost = budget.estimated_cost_usd if budget else 0.0
-
         # --- Write final stats to runs table ---
         run = db.query(Run).filter(Run.run_id == run_id).first()
+        stop_requested = bool(
+            (budget and getattr(budget, "stop_requested", False))
+            or (run and run.stop_requested)
+        )
+        if budget and run and run.stop_requested:
+            budget.stop_requested = True
+        final_status = "STOPPED" if stop_requested else "COMPLETED"
+        estimated_cost = budget.estimated_cost_usd if budget else 0.0
         if run:
             run.completed_at = datetime.now(tz=timezone.utc)
             run.status = final_status
+            run.stop_requested = stop_requested
             run.items_collected = items_collected
             run.items_matched = items_matched
             run.leads_written = leads_written

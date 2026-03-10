@@ -1,19 +1,20 @@
-"""Run the full pipeline in live mode (real Reddit + Groq API calls).
+"""Run the full pipeline in live mode (configured sources + Groq API calls).
 
 Usage:
-    python3 scripts/run_pipeline.py [--time-window-hours N] [--max-cost USD]
+    python3 scripts/run_pipeline.py [--time-window-hours N] [--max-cost USD] [--sources reddit,facebook]
 
 Environment variables (from .env or shell):
     GROQ_API_KEY          — required
     REDDIT_USER_AGENT     — optional (defaults to leadgen-bot/1.0)
     MOCK_MODE             — must NOT be "true"
 
-No Reddit credentials needed — uses the free public JSON API.
+No Reddit credentials needed — uses the free public JSON API for Reddit source.
 """
 import argparse
 import logging
 import os
 import sys
+from datetime import datetime, time as dt_time, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -43,7 +44,7 @@ def _check_env() -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the Reddit lead-gen pipeline (live).")
+    parser = argparse.ArgumentParser(description="Run the lead-gen pipeline (live).")
     parser.add_argument(
         "--time-window-hours", type=int, default=None,
         help="How many hours back to scrape (overrides config.yaml / env)",
@@ -51,6 +52,20 @@ def main() -> None:
     parser.add_argument(
         "--max-cost", type=float, default=None,
         help="Hard cost cap in USD (overrides config.yaml / env)",
+    )
+    parser.add_argument(
+        "--sources",
+        type=str,
+        default=None,
+        help="Comma-separated sources to run (e.g. reddit or reddit,facebook).",
+    )
+    parser.add_argument(
+        "--start-date", type=str, default=None,
+        help="Optional start date in YYYY-MM-DD (must be used with --end-date).",
+    )
+    parser.add_argument(
+        "--end-date", type=str, default=None,
+        help="Optional end date in YYYY-MM-DD (must be used with --start-date).",
     )
     args = parser.parse_args()
 
@@ -62,12 +77,50 @@ def main() -> None:
     if args.max_cost is not None:
         os.environ["MAX_COST_USD"] = str(args.max_cost)
 
+    if bool(args.start_date) ^ bool(args.end_date):
+        logger.error("Provide both --start-date and --end-date together.")
+        sys.exit(2)
+    if args.start_date and args.end_date and args.time_window_hours is not None:
+        logger.error("Use either --time-window-hours or --start-date/--end-date, not both.")
+        sys.exit(2)
+
+    window_start = None
+    window_end = None
+    parsed_sources = None
+    if args.start_date and args.end_date:
+        try:
+            start_d = datetime.strptime(args.start_date, "%Y-%m-%d").date()
+            end_d = datetime.strptime(args.end_date, "%Y-%m-%d").date()
+        except ValueError:
+            logger.error("Dates must be in YYYY-MM-DD format.")
+            sys.exit(2)
+        if end_d < start_d:
+            logger.error("--end-date must be on or after --start-date.")
+            sys.exit(2)
+        window_start = datetime.combine(start_d, dt_time.min, tzinfo=timezone.utc)
+        if end_d == datetime.now(tz=timezone.utc).date():
+            window_end = datetime.now(tz=timezone.utc)
+        else:
+            window_end = datetime.combine(end_d, dt_time.max, tzinfo=timezone.utc)
+
+    if args.sources:
+        parsed_sources = [s.strip().lower() for s in args.sources.split(",") if s.strip()]
+        allowed = {"reddit", "facebook"}
+        invalid = [s for s in parsed_sources if s not in allowed]
+        if invalid:
+            logger.error("Invalid --sources values: %s (allowed: %s)", invalid, sorted(allowed))
+            sys.exit(2)
+
     logger.info("=== Live pipeline run starting ===")
 
     from pipeline.graph import run_pipeline
 
     try:
-        final_state = run_pipeline()
+        final_state = run_pipeline(
+            time_window_start=window_start,
+            time_window_end=window_end,
+            sources=parsed_sources,
+        )
     except Exception as exc:
         logger.error("Pipeline failed: %s", exc)
         sys.exit(1)

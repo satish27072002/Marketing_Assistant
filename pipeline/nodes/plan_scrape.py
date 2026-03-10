@@ -7,6 +7,7 @@ Prompt version stored as PLANNER_PROMPT_V.
 Output: scrape plan dict (validated by Node D)
 """
 import logging
+import math
 import os
 
 import yaml
@@ -18,6 +19,7 @@ from llm.prompts import (
     PLANNER_PROMPT_V,
     PLANNER_PROMPT_TEMPLATE,
     format_event_list,
+    planner_query_examples,
 )
 from llm.schemas import ScrapePlan
 from pipeline.state import PipelineState
@@ -35,7 +37,13 @@ def _load_config() -> dict:
 
 def plan_scrape_node(state: PipelineState) -> PipelineState:
     config = _load_config()
-    mock_mode = os.environ.get("MOCK_MODE", "false").lower() == "true"
+    run_cfg = state.get("run_config", {})
+    mock_mode = bool(
+        run_cfg.get(
+            "mock_mode",
+            os.environ.get("MOCK_MODE", "false").lower() == "true",
+        )
+    )
     budget = state.get("budget")
 
     events = state.get("events", [])
@@ -45,8 +53,24 @@ def plan_scrape_node(state: PipelineState) -> PipelineState:
 
     subreddits = config.get("subreddits", [])
     budget_cfg = config.get("budget", {})
-    max_queries = int(os.environ.get("MAX_QUERIES_PER_RUN", budget_cfg.get("max_queries_per_run", 20)))
-    time_window_hours = int(os.environ.get("TIME_WINDOW_HOURS", 48))
+    max_queries = int(
+        run_cfg.get(
+            "max_queries",
+            os.environ.get("MAX_QUERIES_PER_RUN", budget_cfg.get("max_queries_per_run", 20)),
+        )
+    )
+    if budget and getattr(budget, "time_window_start", None) and getattr(budget, "time_window_end", None):
+        time_window_hours = max(
+            1,
+            math.ceil((budget.time_window_end - budget.time_window_start).total_seconds() / 3600),
+        )
+    else:
+        time_window_hours = int(
+            run_cfg.get(
+                "time_window_hours",
+                os.environ.get("TIME_WINDOW_HOURS", budget_cfg.get("time_window_hours", 48)),
+            )
+        )
 
     event_dicts = [
         {"event_id": e.event_id, "title": e.title, "tags": e.tags}
@@ -58,6 +82,7 @@ def plan_scrape_node(state: PipelineState) -> PipelineState:
         subreddits="\n".join(f"- {s}" for s in subreddits),
         time_window_hours=time_window_hours,
         max_queries=max_queries,
+        planner_query_examples=planner_query_examples(),
     )
 
     client = LLMClient(mock_mode=mock_mode)

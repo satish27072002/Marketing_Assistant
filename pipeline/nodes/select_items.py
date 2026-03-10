@@ -62,9 +62,16 @@ def _priority_score(text: str, tag_keywords: dict[str, list[str]]) -> int:
 def select_items_node(state: PipelineState) -> PipelineState:
     config = _load_config()
     run_id = state.get("run_id", "dev-run")
+    run_cfg = state.get("run_config", {})
     match_config = config.get("match", {})
+    budget_cfg = config.get("budget", {})
     min_text_length = match_config.get("min_text_length", 30)
-    max_items = int(os.environ.get("MAX_ITEMS_PER_RUN", match_config.get("max_items_per_run", 100)))
+    max_items = int(
+        run_cfg.get(
+            "max_items",
+            os.environ.get("MAX_ITEMS_PER_RUN", budget_cfg.get("max_items_per_run", 100)),
+        )
+    )
     max_author_occ = match_config.get("max_author_occurrences_per_run", MAX_AUTHOR_OCCURRENCES)
     tag_keywords = config.get("tag_keywords", {})
 

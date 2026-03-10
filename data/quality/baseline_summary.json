@@ -1,0 +1,93 @@
+{
+  "overall": {
+    "rows_total": 49,
+    "rows_labeled": 49,
+    "precision": 0.3877551020408163,
+    "false_positive_rate": 0.6122448979591837,
+    "p_at_10": 1.0,
+    "p_at_25": 0.76,
+    "p_at_50": 0.3877551020408163
+  },
+  "confusion": {
+    "by_event_tag": {
+      "unknown": {
+        "GOOD_MATCH": 19,
+        "BAD_MATCH": 30
+      }
+    },
+    "by_subreddit": {
+      "StockholmSocialClub": {
+        "GOOD_MATCH": 3,
+        "BAD_MATCH": 8
+      },
+      "stockholm": {
+        "GOOD_MATCH": 16,
+        "BAD_MATCH": 22
+      }
+    },
+    "by_query_type": {
+      "general": {
+        "GOOD_MATCH": 13,
+        "BAD_MATCH": 9
+      },
+      "explicit_intent": {
+        "GOOD_MATCH": 5,
+        "BAD_MATCH": 4
+      },
+      "question": {
+        "GOOD_MATCH": 1,
+        "BAD_MATCH": 17
+      }
+    }
+  },
+  "error_buckets": {
+    "low_confidence": 30
+  },
+  "threshold_sweep": [
+    {
+      "threshold": 0.35,
+      "rows_kept": 19,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "recall_proxy": 1.0
+    },
+    {
+      "threshold": 0.4,
+      "rows_kept": 19,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "recall_proxy": 1.0
+    },
+    {
+      "threshold": 0.45,
+      "rows_kept": 19,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "recall_proxy": 1.0
+    },
+    {
+      "threshold": 0.5,
+      "rows_kept": 19,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "recall_proxy": 1.0
+    },
+    {
+      "threshold": 0.55,
+      "rows_kept": 19,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "recall_proxy": 1.0
+    },
+    {
+      "threshold": 0.6,
+      "rows_kept": 19,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "recall_proxy": 1.0
+    }
+  ],
+  "recommended_tag_thresholds": {
+    "unknown": 0.35
+  }
+}

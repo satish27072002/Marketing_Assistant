@@ -16,6 +16,40 @@ import { formatDateTime } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['', 'NEW', 'REVIEWED', 'MESSAGED', 'SKIP']
 
+function sourceLabel(source: string): string {
+  return source === 'facebook' ? 'Facebook' : 'Reddit'
+}
+
+function toFacebookGroupUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  const m = url.match(/^https?:\/\/(?:www\.)?facebook\.com\/groups\/([^/?#]+)/i)
+  if (!m) return null
+  return `https://www.facebook.com/groups/${m[1]}/`
+}
+
+function leadProfileHref(lead: {
+  source: string
+  username: string
+  profile_url: string | null
+  evidence_posts: { url: string }[]
+  evidence_urls: string[]
+}): string | null {
+  if (lead.profile_url) {
+    if (lead.source === 'facebook') {
+      return toFacebookGroupUrl(lead.profile_url) || lead.profile_url
+    }
+    return lead.profile_url
+  }
+  if (lead.source === 'reddit') return `https://reddit.com/u/${lead.username}`
+  return (
+    toFacebookGroupUrl(lead.evidence_posts[0]?.url) ||
+    toFacebookGroupUrl(lead.evidence_urls[0]) ||
+    lead.evidence_posts[0]?.url ||
+    lead.evidence_urls[0] ||
+    null
+  )
+}
+
 export function LeadsPage() {
   const [filters, setFilters] = useState({
     confidence_min: 0,
@@ -101,6 +135,7 @@ export function LeadsPage() {
               <TableRow>
                 <TableHead className="w-8" />
                 <TableHead>User</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Event</TableHead>
                 <TableHead>Confidence</TableHead>
                 <TableHead>Status</TableHead>
@@ -118,6 +153,7 @@ export function LeadsPage() {
                         <Skeleton className="h-3.5 w-28" />
                       </div>
                     </TableCell>
+                    <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
                     <TableCell><Skeleton className="h-3.5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
@@ -126,7 +162,7 @@ export function LeadsPage() {
                 ))
               ) : leads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-brand-muted">
+                  <TableCell colSpan={7} className="text-center py-12 text-brand-muted">
                     No leads match these filters.
                   </TableCell>
                 </TableRow>
@@ -145,17 +181,31 @@ export function LeadsPage() {
                           <div className="w-7 h-7 rounded-full bg-brand-walnut flex items-center justify-center shrink-0">
                             <span className="text-brand-gold text-[10px] font-bold uppercase">{lead.username[0]}</span>
                           </div>
-                          <a
-                            href={`https://reddit.com/u/${lead.username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-brand-white hover:text-brand-gold flex items-center gap-1 transition-colors truncate"
-                          >
-                            u/{lead.username}
-                            <ExternalLink size={10} className="shrink-0" />
-                          </a>
+                          {(() => {
+                            const href = leadProfileHref(lead)
+                            const label = lead.source === 'reddit' ? `u/${lead.username}` : lead.username
+                            if (!href) {
+                              return <span className="text-brand-white truncate">{label}</span>
+                            }
+                            return (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-brand-white hover:text-brand-gold flex items-center gap-1 transition-colors truncate"
+                              >
+                                {label}
+                                <ExternalLink size={10} className="shrink-0" />
+                              </a>
+                            )
+                          })()}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-[10px] px-2 py-0.5 rounded border border-brand-walnut/50 text-brand-muted/90">
+                          {sourceLabel(lead.source)}
+                        </span>
                       </TableCell>
                       <TableCell className="max-w-[220px]">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -227,7 +277,7 @@ export function LeadsPage() {
 
                     {expanded === lead.id && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={6} className="bg-brand-bg/50 px-12 pb-5 pt-2">
+                        <TableCell colSpan={7} className="bg-brand-bg/50 px-12 pb-5 pt-2">
                           <div className="space-y-3">
                             {lead.user_summary && (
                               <p className="text-xs text-brand-muted italic leading-relaxed">
@@ -253,7 +303,9 @@ export function LeadsPage() {
                               lead.evidence_posts.map((post) => (
                                 <div key={post.item_id} className="rounded-lg border border-brand-walnut/40 overflow-hidden">
                                   <div className="flex items-center justify-between px-3 py-2 bg-brand-walnut/20 border-b border-brand-walnut/30">
-                                    <span className="text-[10px] font-medium text-brand-gold">r/{post.subreddit}</span>
+                                    <span className="text-[10px] font-medium text-brand-gold">
+                                      {post.source === 'facebook' ? `group/${post.subreddit}` : `r/${post.subreddit}`}
+                                    </span>
                                     {post.url.includes('/mock') ? (
                                       <span className="text-[10px] text-brand-muted/50 italic">Mock data</span>
                                     ) : (
@@ -263,7 +315,7 @@ export function LeadsPage() {
                                         rel="noopener noreferrer"
                                         className="text-[10px] text-brand-muted hover:text-brand-gold flex items-center gap-1 transition-colors"
                                       >
-                                        View on Reddit <ExternalLink size={9} />
+                                        {post.source === 'facebook' ? 'View on Facebook' : 'View on Reddit'} <ExternalLink size={9} />
                                       </a>
                                     )}
                                   </div>
@@ -281,7 +333,7 @@ export function LeadsPage() {
                                   {lead.evidence_urls[i] && (
                                     <a href={lead.evidence_urls[i]} target="_blank" rel="noopener noreferrer"
                                       className="text-[10px] text-brand-gold hover:underline flex items-center gap-1">
-                                      View on Reddit <ExternalLink size={9} />
+                                      {lead.source === 'facebook' ? 'View on Facebook' : 'View on Reddit'} <ExternalLink size={9} />
                                     </a>
                                   )}
                                 </div>

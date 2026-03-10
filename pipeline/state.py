@@ -47,5 +47,6 @@ class PipelineState(TypedDict, total=False):
 
     # Shared
     run_id: str
+    run_config: dict[str, Any]
     budget: Any
     errors: list[str]

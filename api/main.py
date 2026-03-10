@@ -32,6 +32,7 @@ load_dotenv()
 from api.routes.runs import router as runs_router
 from api.routes.leads import router as leads_router
 from api.routes.events import router as events_router
+from db.database import init_db
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -41,7 +42,7 @@ logging.basicConfig(
 
 app = FastAPI(
     title="Lead-Gen API",
-    description="Reddit lead generation pipeline — REST + SSE backend",
+    description="Multi-source lead generation pipeline (Reddit/Facebook) — REST + SSE backend",
     version="1.0.0",
 )
 
@@ -62,6 +63,11 @@ app.add_middleware(
 app.include_router(runs_router, prefix="/runs", tags=["runs"])
 app.include_router(leads_router, prefix="/leads", tags=["leads"])
 app.include_router(events_router, prefix="/events", tags=["events"])
+
+
+@app.on_event("startup")
+def startup() -> None:
+    init_db()
 
 
 @app.get("/health", tags=["meta"])

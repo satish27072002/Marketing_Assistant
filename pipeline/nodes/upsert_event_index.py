@@ -60,6 +60,18 @@ def upsert_event_index_node(state: PipelineState) -> PipelineState:
             len(newly_inactive), len(events),
         )
     else:
+        # --- Reactivate events that are still on disk but were previously marked inactive ---
+        reactivated = 0
+        for event in events:
+            if (
+                store.get_content_hash(event.event_id) == hashes[event.event_id]
+                and not store.is_active(event.event_id)
+            ):
+                store.mark_active(event.event_id)
+                reactivated += 1
+        if reactivated:
+            logger.info("Reactivated %d existing events in index", reactivated)
+
         # --- Upsert only new or changed events ---
         to_embed = [
             e for e in events

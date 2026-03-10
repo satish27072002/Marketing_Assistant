@@ -29,49 +29,88 @@ const DEFAULT_PARAMS: RunParams = {
   max_cost_usd: 5.0,
 }
 
+type NumericRunParamKey = 'time_window_hours' | 'max_items' | 'max_queries' | 'max_cost_usd'
+
+function toInputDate(value: Date): string {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function RunsPage() {
   const { data: runs = [], isLoading, refetch } = useRuns(50)
   const triggerRun = useTriggerRun()
   const stopRun = useStopRun()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [startingRunId, setStartingRunId] = useState<string | null>(null)
   const [params, setParams] = useState<RunParams>(DEFAULT_PARAMS)
   const [dateMode, setDateMode] = useState<'lookback' | 'range'>('lookback')
-  const today = new Date().toISOString().split('T')[0]
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString().split('T')[0]
+  const today = toInputDate(new Date())
+  const sevenDaysAgo = toInputDate(new Date(Date.now() - 7 * 24 * 3_600_000))
   const [fromDate, setFromDate] = useState<string>(sevenDaysAgo)
   const [toDate, setToDate] = useState<string>(today)
 
   const activeRun = runs.find((r) => r.status === 'RUNNING')
+  const runInFlight = activeRun || (startingRunId ? { run_id: startingRunId } : null)
+  const isStarting = !!startingRunId && !activeRun
   const { update: sseUpdate } = useSSE(!!activeRun)
 
-  const setParam = (key: keyof RunParams, value: number) =>
+  React.useEffect(() => {
+    if (activeRun) {
+      setStartingRunId(null)
+    }
+  }, [activeRun])
+
+  const setParam = (key: NumericRunParamKey, value: number) =>
     setParams((p) => ({ ...p, [key]: value }))
 
-  // Compute effective params: in range mode, hours = now - fromDate (backend always ends at now)
+  const rangeDays = React.useMemo(() => {
+    if (!fromDate || !toDate) return null
+    const start = new Date(`${fromDate}T00:00:00`).getTime()
+    const end = new Date(`${toDate}T00:00:00`).getTime()
+    return Math.max(1, Math.floor((end - start) / 86_400_000) + 1)
+  }, [fromDate, toDate])
+
+  // Compute effective params for trigger endpoint.
   const effectiveParams: RunParams = React.useMemo(() => {
-    if (dateMode === 'range' && fromDate) {
-      const from = new Date(fromDate).getTime()
-      const now = Date.now()
-      const hours = Math.max(1, Math.ceil((now - from) / 3_600_000))
-      return { ...params, time_window_hours: hours }
+    if (dateMode === 'range' && fromDate && toDate) {
+      return {
+        ...params,
+        time_window_hours: undefined,
+        start_date: fromDate,
+        end_date: toDate,
+      }
     }
-    return params
-  }, [dateMode, fromDate, params])
+    return {
+      ...params,
+      start_date: undefined,
+      end_date: undefined,
+    }
+  }, [dateMode, fromDate, toDate, params])
 
   const handleTrigger = () => {
     triggerRun.mutate(effectiveParams, {
-      onSuccess: () => setTimeout(() => refetch(), 1000),
+      onSuccess: (res) => {
+        setStartingRunId(res.run_id)
+        refetch()
+        setTimeout(() => refetch(), 800)
+        setTimeout(() => setStartingRunId((id) => (id === res.run_id ? null : id)), 7000)
+      },
+      onError: () => {
+        setStartingRunId(null)
+      },
     })
   }
 
   // Helper to format a date range for the hero mini-stat
   const lookbackDisplay = React.useMemo(() => {
-    if (dateMode === 'range' && fromDate) {
+    if (dateMode === 'range' && fromDate && toDate) {
       const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-      return `${fmt(fromDate)} – Today`
+      return `${fmt(fromDate)} – ${fmt(toDate)}`
     }
     return `${Math.round((params.time_window_hours ?? 168) / 24)} days`
-  }, [dateMode, fromDate, params.time_window_hours])
+  }, [dateMode, fromDate, toDate, params.time_window_hours])
 
   const budgetPct = sseUpdate
     ? Math.min(100, (sseUpdate.estimated_cost_usd / (params.max_cost_usd ?? 5)) * 100)
@@ -102,9 +141,9 @@ export function RunsPage() {
       </div>
 
       {/* Hero CTA card */}
-      <Card className={activeRun ? 'border-brand-gold/30 bg-brand-gold/5' : 'border-brand-walnut/40'}>
+      <Card className={runInFlight ? 'border-brand-gold/30 bg-brand-gold/5' : 'border-brand-walnut/40'}>
         <CardContent className="pt-6">
-          {activeRun ? (
+          {runInFlight ? (
             /* ── Active run state ── */
             <div className="space-y-5">
               <div className="flex items-center justify-between">
@@ -114,22 +153,27 @@ export function RunsPage() {
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-gold" />
                   </span>
                   <span className="text-brand-gold font-semibold">
-                    Pipeline running · {activeRun.run_id.slice(0, 8)}…
+                    {isStarting ? 'Starting pipeline…' : `Pipeline running · ${runInFlight.run_id.slice(0, 8)}…`}
                   </span>
                 </div>
-                <Button variant="destructive" size="sm" onClick={() => stopRun.mutate(activeRun.run_id)}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={!activeRun}
+                  onClick={() => activeRun && stopRun.mutate(activeRun.run_id)}
+                >
                   <Square size={11} />
-                  Stop
+                  {isStarting ? 'Starting…' : 'Stop'}
                 </Button>
               </div>
 
               {/* Live counters */}
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { label: 'Collected', value: sseUpdate?.items_collected ?? activeRun.items_collected },
-                  { label: 'Matched',   value: sseUpdate?.items_matched ?? activeRun.items_matched },
-                  { label: 'Leads',     value: sseUpdate?.leads_found ?? activeRun.leads_written, gold: true },
-                  { label: 'Cost',      value: formatCost(sseUpdate?.estimated_cost_usd ?? activeRun.estimated_cost_usd) },
+                  { label: 'Collected', value: sseUpdate?.items_collected ?? activeRun?.items_collected ?? 0 },
+                  { label: 'Matched',   value: sseUpdate?.items_matched ?? activeRun?.items_matched ?? 0 },
+                  { label: 'Leads',     value: sseUpdate?.leads_found ?? activeRun?.leads_written ?? 0, gold: true },
+                  { label: 'Cost',      value: formatCost(sseUpdate?.estimated_cost_usd ?? activeRun?.estimated_cost_usd ?? 0) },
                 ].map(({ label, value, gold }) => (
                   <div key={label} className="rounded border border-brand-walnut/40 bg-brand-bg p-3">
                     <p className="text-[10px] text-brand-muted uppercase tracking-widest">{label}</p>
@@ -169,7 +213,7 @@ export function RunsPage() {
                 {[
                   {
                     icon: Clock,
-                    label: 'Lookback',
+                    label: 'Window',
                     value: lookbackDisplay,
                     desc: 'How far back to search Reddit',
                   },
@@ -271,16 +315,14 @@ export function RunsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {runs.filter((r) => r.items_collected > 0 || r.status === 'RUNNING').length === 0 ? (
+                  {runs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-12 text-brand-muted">
                         No runs yet — click Run Pipeline to start.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    runs
-                      .filter((r) => r.items_collected > 0 || r.status === 'RUNNING')
-                      .map((run) => (
+                    runs.map((run) => (
                         <TableRow key={run.run_id}>
                           <TableCell>
                             <p className="text-brand-white">{formatDateTime(run.started_at)}</p>
@@ -347,9 +389,9 @@ export function RunsPage() {
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm text-brand-white font-medium">Start date</label>
+                    <label className="text-sm text-brand-white font-medium">Date range</label>
                     <span className="text-sm font-semibold text-brand-gold tabular-nums">
-                      {fromDate ? `${Math.max(1, Math.ceil((Date.now() - new Date(fromDate).getTime()) / 86_400_000))} days` : '—'}
+                      {rangeDays ? `${rangeDays} day${rangeDays === 1 ? '' : 's'}` : '—'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -357,19 +399,30 @@ export function RunsPage() {
                       <p className="text-[10px] text-brand-muted uppercase tracking-widest">From</p>
                       <DateInput
                         value={fromDate}
-                        max={today}
-                        onChange={(e) => setFromDate(e.target.value)}
+                        max={toDate || today}
+                        onChange={(e) => {
+                          const nextFrom = e.target.value
+                          setFromDate(nextFrom)
+                          if (toDate && nextFrom > toDate) setToDate(nextFrom)
+                        }}
                       />
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] text-brand-muted uppercase tracking-widest">To</p>
-                      <div className="w-full bg-brand-bg border border-brand-walnut/40 rounded-md px-3 py-1.5 text-sm text-brand-muted/60 italic">
-                        Today
-                      </div>
+                      <DateInput
+                        value={toDate}
+                        min={fromDate}
+                        max={today}
+                        onChange={(e) => {
+                          const nextTo = e.target.value
+                          setToDate(nextTo)
+                          if (fromDate && nextTo < fromDate) setFromDate(nextTo)
+                        }}
+                      />
                     </div>
                   </div>
                   <p className="text-xs text-brand-muted leading-relaxed">
-                    Reddit is searched from the start date up to today.
+                    Reddit is searched between these dates (inclusive).
                   </p>
                 </div>
               )}
@@ -413,7 +466,16 @@ export function RunsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => { setParams(DEFAULT_PARAMS); setDateMode('lookback') }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setParams(DEFAULT_PARAMS)
+                setDateMode('lookback')
+                setFromDate(sevenDaysAgo)
+                setToDate(today)
+              }}
+            >
               Reset defaults
             </Button>
             <Button size="sm" onClick={() => setSettingsOpen(false)}>

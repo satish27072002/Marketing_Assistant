@@ -36,8 +36,9 @@ class RunCreatedResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class EvidencePost(BaseModel):
-    """Full Reddit post that triggered the lead match."""
+    """Full source item that triggered the lead match."""
     item_id: str
+    source: str = "reddit"
     subreddit: str
     text: str
     url: str
@@ -45,6 +46,7 @@ class EvidencePost(BaseModel):
 
 class LeadResponse(BaseModel):
     id: int
+    source: str = "reddit"
     username: str
     profile_url: Optional[str] = None
     primary_event_id: str

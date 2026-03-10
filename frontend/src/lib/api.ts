@@ -18,6 +18,7 @@ export interface Run {
 
 export interface EvidencePost {
   item_id: string
+  source: 'reddit' | 'facebook'
   subreddit: string
   text: string
   url: string
@@ -25,6 +26,7 @@ export interface EvidencePost {
 
 export interface Lead {
   id: number
+  source: 'reddit' | 'facebook'
   username: string
   profile_url: string | null
   primary_event_id: string
@@ -106,12 +108,16 @@ export const api = {
   getRun: (runId: string) => get<Run>(`/runs/${runId}`),
   triggerRun: (params?: {
     time_window_hours?: number
+    start_date?: string
+    end_date?: string
     max_items?: number
     max_queries?: number
     max_cost_usd?: number
   }) => {
     const q = new URLSearchParams()
     if (params?.time_window_hours) q.set('time_window_hours', String(params.time_window_hours))
+    if (params?.start_date) q.set('start_date', params.start_date)
+    if (params?.end_date) q.set('end_date', params.end_date)
     if (params?.max_items) q.set('max_items', String(params.max_items))
     if (params?.max_queries) q.set('max_queries', String(params.max_queries))
     if (params?.max_cost_usd) q.set('max_cost_usd', String(params.max_cost_usd))

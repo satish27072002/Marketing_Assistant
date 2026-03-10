@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Force mock mode before any imports that read env
 os.environ["MOCK_MODE"] = "true"
+# Use a very long window so all historical mock data is captured
+os.environ.setdefault("TIME_WINDOW_HOURS", "99999")
 
 from dotenv import load_dotenv
 load_dotenv()

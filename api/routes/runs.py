@@ -13,24 +13,30 @@ import logging
 import os
 import sys
 import threading
-from datetime import datetime, timezone
+import uuid
+from datetime import date, datetime, time as dt_time, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
+import yaml
 
 # Ensure project root is on path so pipeline imports work
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from db.database import get_db
+from db.database import SessionLocal, get_db
 from db.models import Run
 from api.schemas import RunResponse, RunCreatedResponse, SSEUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+_RUN_START_LOCK = threading.Lock()
+_RUN_META_LOCK = threading.Lock()
+_RUN_MAX_COST_BY_ID: dict[str, float] = {}
+_CONFIG_PATH = os.path.join(_PROJECT_ROOT, "config.yaml")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -52,41 +58,63 @@ def _run_to_response(run: Run) -> RunResponse:
     )
 
 
+def _default_max_cost_usd() -> float:
+    try:
+        with open(_CONFIG_PATH, "r") as f:
+            config = yaml.safe_load(f) or {}
+        return float(config.get("budget", {}).get("max_cost_usd", 5.0))
+    except Exception:
+        return float(os.environ.get("MAX_COST_USD", "5.00"))
+
+
+def _max_cost_for_run(run_id: str) -> float:
+    with _RUN_META_LOCK:
+        if run_id in _RUN_MAX_COST_BY_ID:
+            return _RUN_MAX_COST_BY_ID[run_id]
+    return _default_max_cost_usd()
+
+
+def _date_range_to_utc_window(start_date: date, end_date: date) -> tuple[datetime, datetime]:
+    """Convert local date range to UTC datetimes (inclusive end date)."""
+    local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+    now_local = datetime.now(local_tz)
+
+    start_local = datetime.combine(start_date, dt_time.min, tzinfo=local_tz)
+    if end_date == now_local.date():
+        end_local = now_local
+    else:
+        end_local = datetime.combine(end_date, dt_time.max, tzinfo=local_tz)
+
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
 def _run_in_thread(
+    run_id: str,
     mock_mode: bool = False,
     time_window_hours: Optional[int] = None,
+    time_window_start: Optional[datetime] = None,
+    time_window_end: Optional[datetime] = None,
     max_items: Optional[int] = None,
     max_queries: Optional[int] = None,
     max_cost_usd: Optional[float] = None,
+    sources: Optional[list[str]] = None,
 ) -> None:
     """Wrapper that runs the pipeline in a background daemon thread."""
-    # Save originals so we can restore after the run
-    _saved = {}
-    overrides = {
-        "MOCK_MODE": "true" if mock_mode else None,
-        "TIME_WINDOW_HOURS": str(time_window_hours) if time_window_hours is not None else None,
-        "MAX_ITEMS_PER_RUN": str(max_items) if max_items is not None else None,
-        "MAX_QUERIES_PER_RUN": str(max_queries) if max_queries is not None else None,
-        "MAX_COST_USD": str(max_cost_usd) if max_cost_usd is not None else None,
-    }
-    for key, val in overrides.items():
-        if val is not None:
-            _saved[key] = os.environ.get(key)
-            os.environ[key] = val
-            logger.info("Run override: %s=%s", key, val)
-
     try:
         from pipeline.graph import run_pipeline
-        run_pipeline()
+        run_pipeline(
+            run_id=run_id,
+            mock_mode=mock_mode,
+            time_window_hours=time_window_hours,
+            time_window_start=time_window_start,
+            time_window_end=time_window_end,
+            max_items=max_items,
+            max_queries=max_queries,
+            max_cost_usd=max_cost_usd,
+            sources=sources,
+        )
     except Exception as exc:
         logger.error("Background pipeline run failed: %s", exc)
-    finally:
-        # Restore original env values
-        for key, original in _saved.items():
-            if original is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = original
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +139,6 @@ def list_runs(
 @router.get("/live")
 async def live_stream(
     run_id: Optional[str] = Query(None, description="Subscribe to a specific run. If omitted, streams the latest active run."),
-    db: Session = Depends(get_db),
 ):
     """Server-Sent Events stream — emits run status every 3 seconds.
 
@@ -146,7 +173,7 @@ async def live_stream(
                     continue
 
                 # Compute budget status from cost fields
-                max_cost = float(os.environ.get("MAX_COST_USD", "5.00"))
+                max_cost = _max_cost_for_run(run.run_id)
                 cost = run.estimated_cost_usd or 0.0
                 pct = (cost / max_cost * 100) if max_cost > 0 else 0
                 if pct >= 90:
@@ -203,40 +230,87 @@ def get_run(run_id: str, db: Session = Depends(get_db)):
 def trigger_run(
     mock: bool = Query(False, description="Run in mock mode (no API calls, no Reddit)"),
     time_window_hours: Optional[int] = Query(None, ge=1, le=720, description="How many hours back to search Reddit (default: from config)"),
+    start_date: Optional[date] = Query(None, description="Optional explicit start date (YYYY-MM-DD, local timezone)."),
+    end_date: Optional[date] = Query(None, description="Optional explicit end date (YYYY-MM-DD, local timezone)."),
     max_items: Optional[int] = Query(None, ge=1, le=500, description="Max posts sent to LLM for matching"),
     max_queries: Optional[int] = Query(None, ge=1, le=100, description="Max search queries the LLM generates"),
     max_cost_usd: Optional[float] = Query(None, ge=0.01, le=50.0, description="Budget ceiling in USD"),
+    sources: Optional[str] = Query(
+        None,
+        description="Comma-separated sources to run, e.g. reddit or reddit,facebook",
+    ),
 ):
     """Trigger a new pipeline run. Returns immediately; run executes in background."""
-    thread = threading.Thread(
-        target=_run_in_thread,
-        kwargs=dict(
-            mock_mode=mock,
-            time_window_hours=time_window_hours,
-            max_items=max_items,
-            max_queries=max_queries,
-            max_cost_usd=max_cost_usd,
-        ),
-        daemon=True,
-        name="pipeline-run",
-    )
-    thread.start()
+    if (start_date is None) ^ (end_date is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide both start_date and end_date together.",
+        )
+    if start_date and end_date and end_date < start_date:
+        raise HTTPException(
+            status_code=422,
+            detail="end_date must be on or after start_date.",
+        )
+    if start_date and end_date and time_window_hours is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Use either time_window_hours or start_date/end_date, not both.",
+        )
 
-    # Give the thread a moment to register the run_id in DB
-    import time
-    time.sleep(0.5)
+    time_window_start: Optional[datetime] = None
+    time_window_end: Optional[datetime] = None
+    if start_date and end_date:
+        time_window_start, time_window_end = _date_range_to_utc_window(start_date, end_date)
 
-    # Fetch the most recently created run to return its ID
-    from db.database import SessionLocal
-    tmp_db = SessionLocal()
-    try:
-        run = tmp_db.query(Run).order_by(Run.started_at.desc()).first()
-        if run:
-            return RunCreatedResponse(run_id=run.run_id, status=run.status)
-        # Thread may not have written yet — return placeholder
-        return RunCreatedResponse(run_id="starting", status="RUNNING")
-    finally:
-        tmp_db.close()
+    parsed_sources: Optional[list[str]] = None
+    if sources is not None:
+        parsed_sources = [s.strip().lower() for s in sources.split(",") if s.strip()]
+        allowed = {"reddit", "facebook"}
+        invalid = [s for s in parsed_sources if s not in allowed]
+        if invalid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid sources: {invalid}. Allowed values: {sorted(allowed)}",
+            )
+        if not parsed_sources:
+            raise HTTPException(status_code=422, detail="sources must include at least one value.")
+
+    with _RUN_START_LOCK:
+        db = SessionLocal()
+        try:
+            running = db.query(Run).filter(Run.status == "RUNNING").first()
+            if running:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Run {running.run_id} is already RUNNING. Stop it first.",
+                )
+        finally:
+            db.close()
+
+        run_id = str(uuid.uuid4())
+        effective_max_cost = max_cost_usd if max_cost_usd is not None else _default_max_cost_usd()
+        with _RUN_META_LOCK:
+            _RUN_MAX_COST_BY_ID[run_id] = float(effective_max_cost)
+
+        thread = threading.Thread(
+            target=_run_in_thread,
+            kwargs=dict(
+                run_id=run_id,
+                mock_mode=mock,
+                time_window_hours=time_window_hours,
+                time_window_start=time_window_start,
+                time_window_end=time_window_end,
+                max_items=max_items,
+                max_queries=max_queries,
+                max_cost_usd=max_cost_usd,
+                sources=parsed_sources,
+            ),
+            daemon=True,
+            name=f"pipeline-run-{run_id[:8]}",
+        )
+        thread.start()
+
+    return RunCreatedResponse(run_id=run_id, status="RUNNING")
 
 
 @router.post("/{run_id}/stop", status_code=200)

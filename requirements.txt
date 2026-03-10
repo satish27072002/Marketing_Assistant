@@ -13,6 +13,12 @@ faiss-cpu>=1.8
 # HTTP (Reddit public JSON API — no auth needed)
 requests>=2.31
 
+# PDF extraction for quality dataset seeding
+pypdf>=4.0
+
+# Optional browser collector for Facebook mode=selenium
+selenium>=4.0
+
 # Language detection
 langdetect>=1.0.9
 

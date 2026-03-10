@@ -1,5 +1,25 @@
+# Sources enabled for the run
+sources:
+  enabled:
+    - reddit
+    # - facebook
+
 # Subreddits to monitor — hardcoded, LLM cannot modify this list
 subreddits: 
+
+# Facebook source settings
+facebook:
+  mode: manual_json
+  groups:
+    -
+  manual_input_path: data/import/facebook_posts.json
+  queries_per_group:
+  max_queries_per_run:
+  selenium:
+    headless: true
+    max_scrolls:
+    scroll_pause_seconds:
+    group_urls: {}
 
 # Budget caps — enforced in code, LLM can never exceed these
 budget:
@@ -15,6 +35,26 @@ match:
   batch_size: 
   min_text_length: 
   max_author_occurrences_per_run: 
+
+# Precision-first tuning
+precision:
+  per_tag_confidence_thresholds:
+    coding: 
+    trivia: 
+    dance: 
+    climbing: 
+    social: 
+  explicit_intent_bonus: 
+  ambiguous_intent_penalty: 
+  future_intent_penalty:
+  explicit_intent_patterns:
+    - 
+  ambiguous_intent_patterns:
+    - 
+  future_intent_patterns:
+    -
+  hard_negative_patterns:
+    - 
 
 # Tag auto-derivation keyword map (used when parentInterestIds is empty)
 tag_keywords:

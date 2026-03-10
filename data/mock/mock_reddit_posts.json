@@ -268,5 +268,32 @@
     "permalink": "https://www.reddit.com/r/stockholm/comments/mock030/",
     "text": "I'm a Python developer looking for programming meetups or developer events in Stockholm. Anyone know of any active coding communities?",
     "created_utc": 1771980130.778
+  },
+  {
+    "item_id": "t1_mock031",
+    "type": "comment",
+    "subreddit": "stockholm",
+    "author": "solo_quiz_seeker",
+    "permalink": "https://www.reddit.com/r/stockholm/comments/abc123/_/mock031/",
+    "text": "Stockholm pub quiz events this week?\n\nComment: I've been looking for a pub quiz team actually — I always go alone and it's less fun. Would love to join a regular Thursday night team!",
+    "created_utc": 1772025000.0
+  },
+  {
+    "item_id": "t1_mock032",
+    "type": "comment",
+    "subreddit": "StockholmSocialClub",
+    "author": "lonely_climber_se",
+    "permalink": "https://www.reddit.com/r/StockholmSocialClub/comments/def456/_/mock032/",
+    "text": "Bouldering spots in Stockholm?\n\nComment: I climb at Borgen every Wednesday evening but always go solo. Would genuinely love to find a climbing partner or join a group — it's way more fun with company.",
+    "created_utc": 1771998000.0
+  },
+  {
+    "item_id": "t1_mock033",
+    "type": "comment",
+    "subreddit": "TillSverige",
+    "author": "expat_seeker_sthlm",
+    "permalink": "https://www.reddit.com/r/TillSverige/comments/ghi789/_/mock033/",
+    "text": "Social life in Stockholm as a newcomer?\n\nComment: Moved here 2 months ago from Italy and still struggling to make friends. Would genuinely love to find some events where meeting people is the actual point, not just a side effect.",
+    "created_utc": 1771976000.0
   }
 ]

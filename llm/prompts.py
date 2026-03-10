@@ -4,17 +4,17 @@ Every prompt has a version integer. The version is stored alongside every lead
 and affinity row so quality can be tracked across prompt changes over time.
 """
 
+from llm.prompt_examples import format_matcher_few_shots, format_planner_examples
+
 # ---------------------------------------------------------------------------
 # Node C — PlanScrapeNode
 # ---------------------------------------------------------------------------
 
-PLANNER_PROMPT_V = 1
+PLANNER_PROMPT_V = 2
 
 PLANNER_PROMPT_TEMPLATE = """\
-You are a search query planner for a Reddit lead generation tool.
-
-Your job is to generate targeted Reddit search queries to find users who might be
-interested in the upcoming events listed below.
+You are a precision-first Reddit query planner for Stockholm social events.
+Goal: generate queries that find people with real intent to join.
 
 UPCOMING EVENTS:
 {event_list}
@@ -25,9 +25,21 @@ ALLOWED SUBREDDITS (you may only use these):
 TIME WINDOW: last {time_window_hours} hours
 MAX QUERIES: {max_queries}
 
-Generate search queries that would find Reddit users expressing interest in activities
-matching these events. Focus on intent signals: users asking about similar activities,
-looking for groups, or expressing interest in the topic.
+Intent rubric for query generation:
+- Prioritize explicit join intent and newcomer intent:
+  "looking for friends", "would love to join", "new to stockholm", "gärna haka på".
+- Cover English + Swedish phrasing where natural.
+- Focus on social and activity fit to listed events.
+- De-prioritize generic informational or city utility queries.
+
+Good query shapes (adapt to each event):
+{planner_query_examples}
+
+Avoid query shapes like:
+- "best coffee stockholm"
+- "housing queue stockholm"
+- "weather stockholm"
+- generic activity facts without social intent
 
 Return your response as JSON inside <plan> tags exactly like this:
 <plan>
@@ -45,6 +57,7 @@ Rules:
 - Priority: 3=highest relevance, 0=lowest
 - Maximum {max_queries} queries total
 - No duplicate queries
+- Keep at least 70% of queries focused on explicit social/join intent
 """
 
 
@@ -52,11 +65,12 @@ Rules:
 # Node G — MatchItemsNode
 # ---------------------------------------------------------------------------
 
-MATCHER_PROMPT_V = 1
+MATCHER_PROMPT_V = 2
 
 MATCHER_PROMPT_TEMPLATE = """\
-You are an event-matching assistant. Your job is to determine whether Reddit users
-expressed genuine interest in specific upcoming events based on what they wrote.
+You are a precision-first event matcher.
+Task: decide if each Reddit item shows genuine intent to join one or more candidate events.
+If evidence is weak or ambiguous, prefer returning no match.
 
 CANDIDATE EVENTS:
 {event_list}
@@ -64,20 +78,27 @@ CANDIDATE EVENTS:
 REDDIT ITEMS TO ANALYSE:
 {items_list}
 
-For each Reddit item, decide which events (if any) the user seems genuinely interested
-in based on their post or comment. Only match if there is clear evidence of interest.
+Decision rubric:
+- READY_NOW (0.70-1.00):
+  clear intent to join soon, asks to join, asks details, or seeks activity partners.
+- FUTURE_INTEREST (0.45-0.69):
+  interest exists but timing uncertain ("next week", "can't this time", "tentative").
+  Only match recurring/likely-repeat events.
+- EXCLUDE (<0.45):
+  vague praise, generic questions, off-topic utility posts, memes/news/politics, or no join intent.
 
-Scoring guide:
-- 0.9-1.0: Explicitly asks about or seeks this exact type of event
-- 0.7-0.8: Strong indirect signal (mentions the activity, looking for it)
-- 0.5-0.6: Moderate signal (related interest, possible fit)
-- 0.3-0.4: Weak signal (tangential mention)
-- Below 0.3: Do not include the match
+Language coverage:
+- Handle English and Swedish intent signals (for example:
+  "jag är intresserad", "hänger gärna på", "gärna", "kan inte denna gång").
 
-Return ALL events this person shows genuine interest in, up to 3 per item.
-Do not limit to one match if multiple events are relevant — if a user mentions
-interest in two different activities, include both. Only include matches with confidence >= 0.3.
-If an item has no relevant matches, return an empty matches list for it.
+Few-shot calibration:
+{matcher_few_shots}
+
+Matching requirements:
+- Only match when text evidence links person + activity + social intent.
+- Prefer precision over recall. When unsure, return empty matches.
+- Up to 3 matches per item.
+- Include all relevant events only if evidence supports each one.
 
 Return your response as JSON inside <matches> tags exactly like this:
 <matches>
@@ -191,3 +212,11 @@ def format_items_list(items: list[dict]) -> str:
 
 def format_evidence_list(excerpts: list[str]) -> str:
     return "\n".join(f"- {e}" for e in excerpts)
+
+
+def planner_query_examples() -> str:
+    return format_planner_examples()
+
+
+def matcher_few_shots() -> str:
+    return format_matcher_few_shots()

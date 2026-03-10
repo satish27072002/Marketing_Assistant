@@ -5,12 +5,14 @@ export function useRuns(limit = 50) {
   return useQuery({
     queryKey: ['runs', limit],
     queryFn: () => api.getRuns(limit),
-    refetchInterval: 10_000,
+    refetchInterval: 3_000,
   })
 }
 
 export interface RunParams {
   time_window_hours?: number
+  start_date?: string
+  end_date?: string
   max_items?: number
   max_queries?: number
   max_cost_usd?: number

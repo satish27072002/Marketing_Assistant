@@ -21,30 +21,49 @@ VALID_STATUSES = {"NEW", "REVIEWED", "MESSAGED", "SKIP"}
 VALID_FEEDBACK = {"GOOD_MATCH", "BAD_MATCH"}
 
 
+def _infer_item_source(item_id: str, permalink: str) -> str:
+    if str(item_id).startswith("fb_"):
+        return "facebook"
+    if "facebook.com" in str(permalink or "").lower():
+        return "facebook"
+    return "reddit"
+
+
 def _get_evidence_posts(db: Session, username: str, event_id: str) -> list[EvidencePost]:
-    """Fetch the full Reddit post(s) that triggered this lead match."""
-    affinities = (
-        db.query(UserEventAffinity)
+    """Fetch full source item(s) that triggered this lead match."""
+    rows = (
+        db.query(
+            RawItem.item_id,
+            RawItem.subreddit,
+            RawItem.text,
+            RawItem.permalink,
+            UserEventAffinity.id,
+        )
+        .join(
+            UserEventAffinity,
+            UserEventAffinity.evidence_item_id == RawItem.item_id,
+        )
         .filter(
             UserEventAffinity.username == username,
             UserEventAffinity.event_id == event_id,
         )
+        .order_by(UserEventAffinity.id.asc())
         .all()
     )
+
     posts: list[EvidencePost] = []
     seen_item_ids: set[str] = set()
-    for aff in affinities:
-        if aff.evidence_item_id in seen_item_ids:
+    for item_id, subreddit, text, permalink, _ in rows:
+        if item_id in seen_item_ids:
             continue
-        seen_item_ids.add(aff.evidence_item_id)
-        raw = db.query(RawItem).filter(RawItem.item_id == aff.evidence_item_id).first()
-        if raw:
-            posts.append(EvidencePost(
-                item_id=raw.item_id,
-                subreddit=raw.subreddit,
-                text=raw.text,
-                url=raw.permalink,
-            ))
+        seen_item_ids.add(item_id)
+        posts.append(EvidencePost(
+            item_id=item_id,
+            source=_infer_item_source(item_id, permalink),
+            subreddit=subreddit,
+            text=text,
+            url=permalink,
+        ))
     return posts
 
 

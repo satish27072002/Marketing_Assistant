@@ -1,0 +1,47 @@
+[
+  {
+    "item_id": "fb5_mock_001",
+    "type": "post",
+    "group": "Meet new friends in Stockholm",
+    "author": "new.in.city",
+    "permalink": "https://www.facebook.com/groups/580254538771785/posts/1001",
+    "text": "I am new in Stockholm and looking for social meetup plans this Friday to meet new people.",
+    "created_utc": "2026-03-09T09:15:00Z"
+  },
+  {
+    "item_id": "fb5_mock_002",
+    "type": "post",
+    "group": "Expats in Stockholm",
+    "author": "anna.expat",
+    "permalink": "https://www.facebook.com/groups/1132472560424695/posts/1002",
+    "text": "Any pub quiz in Stockholm this Friday? I would love to join a trivia team.",
+    "created_utc": "2026-03-09T08:35:00Z"
+  },
+  {
+    "item_id": "fb5_mock_003",
+    "type": "post",
+    "group": "Hike around Stockholm!",
+    "author": "trail.lover",
+    "permalink": "https://www.facebook.com/groups/1153238151883193/posts/1003",
+    "text": "Looking for a hiking group meet around Stockholm this weekend.",
+    "created_utc": "2026-03-09T07:55:00Z"
+  },
+  {
+    "item_id": "fb5_mock_004",
+    "type": "post",
+    "group": "Stockholm Climbing Group",
+    "author": "climb.with.me",
+    "permalink": "https://www.facebook.com/groups/110341332754013/posts/1004",
+    "text": "Climbing group meet in Stockholm on Friday evening, beginners welcome.",
+    "created_utc": "2026-03-09T09:45:00Z"
+  },
+  {
+    "item_id": "fb5_mock_005",
+    "type": "post",
+    "group": "Board Games Stockholm / Bradspel I Stockholm",
+    "author": "boardgame.nights",
+    "permalink": "https://www.facebook.com/groups/2421982078082466/posts/1005",
+    "text": "Board games and pub quiz style trivia night in Stockholm this Friday. Join us!",
+    "created_utc": "2026-03-09T10:05:00Z"
+  }
+]
