@@ -11,41 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { leadProfileHref, sourceLabel } from '@/lib/leadLinks'
 import { formatDate, formatCost } from '@/lib/utils'
-
-function sourceLabel(source: string): string {
-  return source === 'facebook' ? 'Facebook' : 'Reddit'
-}
-
-function toFacebookGroupUrl(url: string | null | undefined): string | null {
-  if (!url) return null
-  const m = url.match(/^https?:\/\/(?:www\.)?facebook\.com\/groups\/([^/?#]+)/i)
-  if (!m) return null
-  return `https://www.facebook.com/groups/${m[1]}/`
-}
-
-function leadProfileHref(lead: {
-  source: string
-  username: string
-  profile_url: string | null
-  evidence_posts: { url: string }[]
-  evidence_urls: string[]
-}): string | null {
-  if (lead.profile_url) {
-    if (lead.source === 'facebook') {
-      return toFacebookGroupUrl(lead.profile_url) || lead.profile_url
-    }
-    return lead.profile_url
-  }
-  if (lead.source === 'reddit') return `https://reddit.com/u/${lead.username}`
-  return (
-    toFacebookGroupUrl(lead.evidence_posts[0]?.url) ||
-    toFacebookGroupUrl(lead.evidence_urls[0]) ||
-    lead.evidence_posts[0]?.url ||
-    lead.evidence_urls[0] ||
-    null
-  )
-}
 
 export function DashboardPage() {
   const { data: leads = [], isLoading: leadsLoading } = useLeads({ limit: 100 })

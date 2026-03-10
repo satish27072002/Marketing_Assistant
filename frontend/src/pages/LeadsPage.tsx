@@ -12,56 +12,27 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { leadProfileHref, sourceLabel } from '@/lib/leadLinks'
 import { formatDateTime } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['', 'NEW', 'REVIEWED', 'MESSAGED', 'SKIP']
-
-function sourceLabel(source: string): string {
-  return source === 'facebook' ? 'Facebook' : 'Reddit'
-}
-
-function toFacebookGroupUrl(url: string | null | undefined): string | null {
-  if (!url) return null
-  const m = url.match(/^https?:\/\/(?:www\.)?facebook\.com\/groups\/([^/?#]+)/i)
-  if (!m) return null
-  return `https://www.facebook.com/groups/${m[1]}/`
-}
-
-function leadProfileHref(lead: {
-  source: string
-  username: string
-  profile_url: string | null
-  evidence_posts: { url: string }[]
-  evidence_urls: string[]
-}): string | null {
-  if (lead.profile_url) {
-    if (lead.source === 'facebook') {
-      return toFacebookGroupUrl(lead.profile_url) || lead.profile_url
-    }
-    return lead.profile_url
-  }
-  if (lead.source === 'reddit') return `https://reddit.com/u/${lead.username}`
-  return (
-    toFacebookGroupUrl(lead.evidence_posts[0]?.url) ||
-    toFacebookGroupUrl(lead.evidence_urls[0]) ||
-    lead.evidence_posts[0]?.url ||
-    lead.evidence_urls[0] ||
-    null
-  )
-}
 
 export function LeadsPage() {
   const [filters, setFilters] = useState({
     confidence_min: 0,
     status: '',
+    source: '',
     event_id: '',
     username: '',
   })
   const [expanded, setExpanded] = useState<number | null>(null)
 
+  const selectedSource = (filters.source || undefined) as 'reddit' | 'facebook' | undefined
+
   const { data: leads = [], isLoading } = useLeads({
     confidence_min: filters.confidence_min,
     status: filters.status || undefined,
+    source: selectedSource,
     event_id: filters.event_id || undefined,
     username: filters.username || undefined,
     limit: 200,
@@ -112,6 +83,16 @@ export function LeadsPage() {
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>{s || 'All statuses'}</option>
           ))}
+        </select>
+
+        <select
+          value={filters.source}
+          onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}
+          className="h-8 bg-brand-bg border border-brand-walnut/40 rounded px-3 text-sm text-brand-white focus:outline-none focus:border-brand-gold/50"
+        >
+          <option value="">All sources</option>
+          <option value="reddit">Reddit</option>
+          <option value="facebook">Facebook</option>
         </select>
 
         <div className="flex items-center gap-2 text-sm text-brand-muted">

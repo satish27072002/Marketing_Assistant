@@ -169,17 +169,26 @@ def run_pipeline(
         max_cost_usd=effective_max_cost_usd,
     )
 
-    # Create run record in DB
+    # Create or update run record in DB
     db = SessionLocal()
     try:
-        run = Run(
-            run_id=run_id,
-            started_at=now,
-            status="RUNNING",
-            time_window_start=resolved_start,
-            time_window_end=resolved_end,
-        )
-        db.add(run)
+        run = db.query(Run).filter(Run.run_id == run_id).first()
+        if run is None:
+            run = Run(
+                run_id=run_id,
+                started_at=now,
+                status="RUNNING",
+                time_window_start=resolved_start,
+                time_window_end=resolved_end,
+                stop_requested=False,
+            )
+            db.add(run)
+        else:
+            run.status = "RUNNING"
+            run.time_window_start = resolved_start
+            run.time_window_end = resolved_end
+            run.completed_at = None
+            run.error_log = None
         db.commit()
         logger.info("Started run %s", run_id)
     finally:

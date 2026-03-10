@@ -14,7 +14,7 @@ import os
 import sys
 import threading
 import uuid
-from datetime import date, datetime, time as dt_time, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -65,6 +65,15 @@ def _default_max_cost_usd() -> float:
         return float(config.get("budget", {}).get("max_cost_usd", 5.0))
     except Exception:
         return float(os.environ.get("MAX_COST_USD", "5.00"))
+
+
+def _default_time_window_hours() -> int:
+    try:
+        with open(_CONFIG_PATH, "r") as f:
+            config = yaml.safe_load(f) or {}
+        return int(config.get("budget", {}).get("time_window_hours", 48))
+    except Exception:
+        return int(os.environ.get("TIME_WINDOW_HOURS", "48"))
 
 
 def _max_cost_for_run(run_id: str) -> float:
@@ -261,6 +270,11 @@ def trigger_run(
     time_window_end: Optional[datetime] = None
     if start_date and end_date:
         time_window_start, time_window_end = _date_range_to_utc_window(start_date, end_date)
+    else:
+        effective_hours = int(time_window_hours if time_window_hours is not None else _default_time_window_hours())
+        now_utc = datetime.now(tz=timezone.utc)
+        time_window_end = now_utc
+        time_window_start = now_utc - timedelta(hours=effective_hours)
 
     parsed_sources: Optional[list[str]] = None
     if sources is not None:
@@ -289,6 +303,17 @@ def trigger_run(
 
         run_id = str(uuid.uuid4())
         effective_max_cost = max_cost_usd if max_cost_usd is not None else _default_max_cost_usd()
+        now_utc = datetime.now(tz=timezone.utc)
+        run = Run(
+            run_id=run_id,
+            started_at=now_utc,
+            status="RUNNING",
+            time_window_start=time_window_start or now_utc,
+            time_window_end=time_window_end or now_utc,
+            stop_requested=False,
+        )
+        db.add(run)
+        db.commit()
         with _RUN_META_LOCK:
             _RUN_MAX_COST_BY_ID[run_id] = float(effective_max_cost)
 

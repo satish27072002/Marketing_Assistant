@@ -29,6 +29,20 @@ logging.basicConfig(
 logger = logging.getLogger("run_pipeline")
 
 
+def _date_range_to_utc_window(start_date, end_date) -> tuple[datetime, datetime]:
+    """Convert local date range to UTC datetimes (inclusive end date)."""
+    local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+    now_local = datetime.now(local_tz)
+
+    start_local = datetime.combine(start_date, dt_time.min, tzinfo=local_tz)
+    if end_date == now_local.date():
+        end_local = now_local
+    else:
+        end_local = datetime.combine(end_date, dt_time.max, tzinfo=local_tz)
+
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
 def _check_env() -> bool:
     required = ["GROQ_API_KEY"]
     missing = [v for v in required if not os.environ.get(v)]
@@ -97,11 +111,7 @@ def main() -> None:
         if end_d < start_d:
             logger.error("--end-date must be on or after --start-date.")
             sys.exit(2)
-        window_start = datetime.combine(start_d, dt_time.min, tzinfo=timezone.utc)
-        if end_d == datetime.now(tz=timezone.utc).date():
-            window_end = datetime.now(tz=timezone.utc)
-        else:
-            window_end = datetime.combine(end_d, dt_time.max, tzinfo=timezone.utc)
+        window_start, window_end = _date_range_to_utc_window(start_d, end_d)
 
     if args.sources:
         parsed_sources = [s.strip().lower() for s in args.sources.split(",") if s.strip()]
@@ -117,8 +127,10 @@ def main() -> None:
 
     try:
         final_state = run_pipeline(
+            time_window_hours=args.time_window_hours,
             time_window_start=window_start,
             time_window_end=window_end,
+            max_cost_usd=args.max_cost,
             sources=parsed_sources,
         )
     except Exception as exc:

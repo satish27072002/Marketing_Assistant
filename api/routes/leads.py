@@ -19,6 +19,7 @@ router = APIRouter()
 
 VALID_STATUSES = {"NEW", "REVIEWED", "MESSAGED", "SKIP"}
 VALID_FEEDBACK = {"GOOD_MATCH", "BAD_MATCH"}
+VALID_SOURCES = {"reddit", "facebook"}
 
 
 def _infer_item_source(item_id: str, permalink: str) -> str:
@@ -78,6 +79,7 @@ def _lead_to_response(lead: Lead, db: Session) -> LeadResponse:
 def list_leads(
     confidence_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum match confidence"),
     status: Optional[str] = Query(None, description="Filter by status: NEW, REVIEWED, MESSAGED, SKIP"),
+    source: Optional[str] = Query(None, description="Filter by source: reddit, facebook"),
     event_id: Optional[str] = Query(None, description="Filter by primary_event_id"),
     username: Optional[str] = Query(None, description="Search by username (partial match)"),
     skip: int = Query(0, ge=0),
@@ -92,6 +94,15 @@ def list_leads(
 
     if status:
         q = q.filter(Lead.status == status.upper())
+
+    if source:
+        normalized_source = source.strip().lower()
+        if normalized_source not in VALID_SOURCES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid source {source!r}. Must be one of: {sorted(VALID_SOURCES)}",
+            )
+        q = q.filter(Lead.source == normalized_source)
 
     if event_id:
         q = q.filter(Lead.primary_event_id == event_id)

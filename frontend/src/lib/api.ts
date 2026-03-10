@@ -130,6 +130,7 @@ export const api = {
   getLeads: (params?: {
     confidence_min?: number
     status?: string
+    source?: 'reddit' | 'facebook'
     event_id?: string
     username?: string
     limit?: number
@@ -138,6 +139,7 @@ export const api = {
     const q = new URLSearchParams()
     if (params?.confidence_min != null) q.set('confidence_min', String(params.confidence_min))
     if (params?.status) q.set('status', params.status)
+    if (params?.source) q.set('source', params.source)
     if (params?.event_id) q.set('event_id', params.event_id)
     if (params?.username) q.set('username', params.username)
     if (params?.limit != null) q.set('limit', String(params.limit))

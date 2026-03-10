@@ -4,6 +4,7 @@ import { api, type LeadPatch } from '@/lib/api'
 interface LeadFilters {
   confidence_min?: number
   status?: string
+  source?: 'reddit' | 'facebook'
   event_id?: string
   username?: string
   limit?: number

@@ -66,14 +66,18 @@ def aggregate_users_node(state: PipelineState) -> PipelineState:
     user_aggregates = []
 
     try:
-        # Load all affinity rows written during this run's items
-        # (join via evidence_item_id → raw_items → run_id)
-        run_item_ids = (
-            db.query(RawItem.item_id)
+        # Load all raw items for this run once; reuse permalink map below.
+        run_raw_rows = (
+            db.query(RawItem.item_id, RawItem.permalink)
             .filter(RawItem.run_id == run_id)
-            .subquery()
-            .select()
+            .all()
         )
+        if not run_raw_rows:
+            logger.info("AggregateUsersNode: no raw items for run %s", run_id)
+            return {**state, "user_aggregates": []}
+
+        permalink_map = {item_id: permalink for item_id, permalink in run_raw_rows}
+        run_item_ids = list(permalink_map.keys())
         affinities = (
             db.query(UserEventAffinity)
             .filter(UserEventAffinity.evidence_item_id.in_(run_item_ids))
@@ -121,12 +125,6 @@ def aggregate_users_node(state: PipelineState) -> PipelineState:
                 if r.evidence_excerpt
             ]
             evidence_item_ids = [r.evidence_item_id for r in rows[:3]]
-            raw_rows = (
-                db.query(RawItem.item_id, RawItem.permalink)
-                .filter(RawItem.item_id.in_(evidence_item_ids))
-                .all()
-            )
-            permalink_map = {item_id: permalink for item_id, permalink in raw_rows}
             evidence_urls = [
                 permalink_map[item_id]
                 for item_id in evidence_item_ids
